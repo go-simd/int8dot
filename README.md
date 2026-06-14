@@ -65,7 +65,7 @@ tail for the sub-stride remainder.
 | arch | int8 / uint8 kernel | u8×s8 kernel | notes |
 |---|---|---|---|
 | **amd64**   | `VPMOVSXBW/VPMOVZXBW` + `VPMADDWD` (AVX2) | AVX2 | runtime-gated on AVX2; VNNI deferred (see below) |
-| **arm64**   | *scalar (Go 1.26)* | *scalar* | vector int-multiply lands in **Go 1.27** (see below) |
+| **arm64**   | `VSMULL/VUMULL` widening (NEON, **Go 1.27+**) | `VUXTL`+`VSXTL`+`VSMULL` (NEON, **Go 1.27+**) | scalar on stable Go ≤ 1.26 (see below) |
 | **ppc64le** | `VMULESB/VMULOSB` even/odd widening (VMX) | *scalar* | no mixed-sign byte multiply on Power |
 | **s390x**   | `VMEB/VMOB` even/odd widening (vector facility) | *scalar* | big-endian; no mixed-sign byte multiply |
 | **riscv64** | `VWMULVV` + `VWREDSUMVS` (RVV) | `VWMULSUVV` (RVV) | runtime-gated on RVV |
@@ -78,13 +78,26 @@ Every other architecture uses the portable scalar reference.
 This package targets **stable Go**. A few wrinkles in the current assembler shape
 the table above; all are honest, documented trade-offs rather than silent gaps:
 
-- **arm64 — scalar on Go ≤ 1.26.** The vector integer-multiply mnemonics this
-  needs (`VSMULL`/`VUMULL`/`VSMLAL`/`VUMLAL`/`VSXTL`/`VMUL`) are not exposed by
-  the Go assembler until **Go 1.27** (1.26 only has `VPMULL`, polynomial
-  multiply, which is useless for integer arithmetic). A ready NEON widening
-  kernel can be wired in the moment 1.27 ships; until then arm64 runs the scalar
-  reference. The ARMv8.2 dot-product extension (`SDOT`/`UDOT`) is not in the
-  assembler at all yet.
+- **arm64 — NEON SIMD on Go 1.27+, scalar on stable Go ≤ 1.26.** All three dot
+  products have a NEON widening multiply-accumulate kernel (`VSXTL`/`VUXTL` widen
+  the bytes to 16-bit, `VSMULL`/`VUMULL` widen-multiply to 32-bit, `VADD`
+  accumulates, `VADDV` reduces, with a scalar tail). Those integer-multiply
+  mnemonics are only exposed by the Go arm64 assembler from **Go 1.27** (1.26 only
+  has `VPMULL`, polynomial multiply, useless for integer arithmetic), so the
+  kernel is `//go:build arm64 && go1.27` and **stable Go falls back to the scalar
+  reference** — there is no SIMD on Go ≤ 1.26. `DotU8S8` is full SIMD here too
+  (unlike ppc64le/s390x/loong64): the unsigned operand is zero-extended, the
+  signed operand sign-extended, and the signed halfword multiply then yields the
+  exact mixed-sign product.
+
+  The ARMv8.2 dot-product instructions (`SDOT`/`UDOT`/`USDOT`) would be the
+  one-instruction kernel, but as of the Go 1.27 dev tree the assembler exposes
+  them only in their **SVE** form (`ZSDOT`/`ZUDOT`/`ZUSDOT`, scalable Z-registers
+  + predicate) — there is no NEON/Advanced-SIMD `SDOT` mnemonic, and SVE is not
+  implemented by Apple Silicon (where this package is developed and natively
+  tested). The portable NEON widening-multiply path is used instead; a `ZSDOT`
+  kernel is a clean follow-up once the assembler grows a NEON `SDOT` (or a
+  validated SVE runner exists).
 - **amd64 — AVX2, not VNNI (yet).** `VPDPBUSD` (AVX-512-VNNI) is the ideal
   `uint8×int8` instruction, but it cannot be validated or coverage-gated in this
   project's CI: qemu's TCG implements no AVX-512, so neither the differential
@@ -109,7 +122,16 @@ x86-64, under qemu TCG — absolute throughput is depressed by emulation but the
 | 4096 |  257 MB/s | 1034 MB/s | ~4.0× |
 
 ppc64le and s390x are **qemu-validated; native performance pending** access to
-real hardware. arm64's SIMD numbers are pending the Go 1.27 kernel.
+real hardware.
+
+The arm64 NEON kernel, measured natively on Apple Silicon with gotip (Go 1.27),
+runs ~2.4× the scalar reference at large sizes (and ~1.8× at dim 64):
+
+| dim | scalar | NEON | speedup |
+|----:|-------:|-----:|--------:|
+|  256 | 2894 MB/s | 7025 MB/s | ~2.4× |
+|  768 | 3060 MB/s | 7110 MB/s | ~2.3× |
+| 4096 | 3123 MB/s | 7508 MB/s | ~2.4× |
 
 ## Validation
 
@@ -130,8 +152,13 @@ While building this, several instructions turned out to be absent from the
 **stable Go 1.26** assembler (present only in the Go 1.27 dev tree), or to behave
 incorrectly under emulation — recorded here for the next person:
 
-- **arm64:** no `VSMULL/VUMULL/VSMLAL/VUMLAL/VSXTL/VMUL` (integer vector
-  multiply) and no `SDOT/UDOT` — all arrive in Go 1.27.
+- **arm64:** the integer vector multiplies `VSMULL/VUMULL/VSMLAL/VUMLAL` and the
+  widening `VSXTL/VUXTL` are **absent from stable Go 1.26** and arrive in **Go
+  1.27** (1.26 has only the polynomial `VPMULL`). The dot-product instructions
+  `SDOT/UDOT/USDOT` are in Go 1.27 **only as SVE** (`ZSDOT/ZUDOT/ZUSDOT`, Z-regs +
+  predicate) — there is still **no NEON/Advanced-SIMD `SDOT`** mnemonic in
+  `cmd/internal/obj/arm64`, so the kernel uses the NEON widening-multiply path
+  (which also runs on Apple Silicon, where SVE is unavailable).
 - **ppc64le:** no `VMSUMMBM/VMSUMUBM` (byte multiply-sum); only `VMSUMUDM`
   (doubleword). The even/odd `VMULESB/VMULOSB`→`VMULESH/VMULOSH` path is used
   instead.
