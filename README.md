@@ -121,8 +121,14 @@ x86-64, under qemu TCG — absolute throughput is depressed by emulation but the
 |  768 |  255 MB/s |  965 MB/s | ~3.8× |
 | 4096 |  257 MB/s | 1034 MB/s | ~4.0× |
 
-ppc64le and s390x are **qemu-validated; native performance pending** access to
-real hardware.
+**ppc64le is now measured on real POWER10 silicon** (GCC Compile Farm,
+https://portal.cfarm.net/, VSX, Go 1.26.4, June 2026): the VSX INT8 MAC kernel
+runs `Dot` at dim 4096 at ~3055 MB/s vs ~744 MB/s scalar — **~4.1×** native.
+Notably, ppc64le has full INT8 SIMD on **stable Go today** (no Go 1.27
+requirement, unlike arm64's NEON path).
+
+**s390x stays qemu-validated for correctness only; native throughput pending**
+access to a GitHub-hosted IBM Z runner — no s390x throughput number is quoted.
 
 The arm64 NEON kernel, measured natively on Apple Silicon with gotip (Go 1.27),
 runs ~2.4× the scalar reference at large sizes (and ~1.8× at dim 64):
@@ -139,8 +145,15 @@ Each SIMD kernel is checked **bit-exact against the scalar reference** — there
 a single right answer for integer MAC — on its real target:
 
 - **amd64** natively on an x86-64 VM (AVX2), **arm64** natively;
-- **ppc64le, s390x, riscv64, loong64** under qemu (`tonistiigi/binfmt`), with the
-  big-endian s390x run specifically pinning byte/lane order.
+- **ppc64le** natively on real POWER10 silicon (GCC Compile Farm, VSX, Go
+  1.26.4), and **s390x, riscv64, loong64** under qemu (`tonistiigi/binfmt`), with
+  the big-endian s390x run specifically pinning byte/lane order.
+
+Beyond the six SIMD targets, the portable scalar reference is now build- and
+test-validated on a **seventh architecture, ppc64 (big-endian)**, on real POWER9
+silicon (GCC Compile Farm) — bit-exact on a big-endian target distinct from
+s390x's vector kernel. ppc64 BE carries no VSX build tag, so it exercises the
+generic path. Framing: **six SIMD targets, validated on seven architectures.**
 
 `FuzzDot` (a differential fuzzer over all three operations) and a size sweep
 covering the vector body, the scalar tail and the boundaries pass on every
