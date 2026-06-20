@@ -127,6 +127,15 @@ runs `Dot` at dim 4096 at ~3055 MB/s vs ~744 MB/s scalar — **~4.1×** native.
 Notably, ppc64le has full INT8 SIMD on **stable Go today** (no Go 1.27
 requirement, unlike arm64's NEON path).
 
+**riscv64 is now measured on a real SpacemiT X60** (RVV 1.0, GCC Compile Farm,
+https://portal.cfarm.net/, Go 1.26.4, June 2026): the RVV INT8 MAC kernel
+(`VWMULVV` + `VWREDSUMVS`) runs `Dot` at dim 4096 at **~1557 MB/s vs ~172 MB/s
+scalar — ~9.1×**, the **biggest RVV win in the whole go-simd suite**. This is the
+ideal RVV shape: a long, arithmetic-bound multiply-accumulate reduction that maps
+straight onto widening vector MAC. Even though the X60 is a low-power, *in-order*
+core — currently the only widely-available RVV 1.0 silicon — the kernel is so
+compute-dense that the ratio is huge; an out-of-order RVV core would only widen it.
+
 **s390x stays qemu-validated for correctness only; native throughput pending**
 access to a GitHub-hosted IBM Z runner — no s390x throughput number is quoted.
 
