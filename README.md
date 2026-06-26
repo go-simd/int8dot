@@ -121,20 +121,28 @@ x86-64, under qemu TCG — absolute throughput is depressed by emulation but the
 |  768 |  255 MB/s |  965 MB/s | ~3.8× |
 | 4096 |  257 MB/s | 1034 MB/s | ~4.0× |
 
-**ppc64le is now measured on real POWER10 silicon** (GCC Compile Farm,
-https://portal.cfarm.net/, VSX, Go 1.26.4, June 2026): the VSX INT8 MAC kernel
+**ppc64le is now measured on real POWER9 silicon** (GCC Compile Farm,
+https://portal.cfarm.net/, VSX, Go 1.26.4, 2026-06-26): the VSX INT8 MAC kernel
 runs `Dot` at dim 4096 at ~3055 MB/s vs ~744 MB/s scalar — **~4.1×** native.
 Notably, ppc64le has full INT8 SIMD on **stable Go today** (no Go 1.27
 requirement, unlike arm64's NEON path).
 
 **riscv64 is now measured on a real SpacemiT X60** (RVV 1.0, GCC Compile Farm,
-https://portal.cfarm.net/, Go 1.26.4, June 2026): the RVV INT8 MAC kernel
+https://portal.cfarm.net/, Go 1.26.4, 2026-06-26): the RVV INT8 MAC kernel
 (`VWMULVV` + `VWREDSUMVS`) runs `Dot` at dim 4096 at **~1557 MB/s vs ~172 MB/s
 scalar — ~9.1×**, the **biggest RVV win in the whole go-simd suite**. This is the
 ideal RVV shape: a long, arithmetic-bound multiply-accumulate reduction that maps
 straight onto widening vector MAC. Even though the X60 is a low-power, *in-order*
 core — currently the only widely-available RVV 1.0 silicon — the kernel is so
 compute-dense that the ratio is huge; an out-of-order RVV core would only widen it.
+
+**loong64 is now measured on real Loongson 3A5000 silicon** (LSX, GCC Compile
+Farm, https://portal.cfarm.net/, cfarm401, Go 1.26.4, 2026-06-26): the LSX INT8
+MAC kernels run at **~8.9× the scalar reference overall**, with **`DotUint8`
+(`VMULWEVHB`/`VMULWODHB` even/odd widening) the standout at ~13.8×**. `DotU8S8`
+is scalar on loong64 (no mixed unsigned×signed byte multiply on LoongArch), so
+that contraction tracks the scalar baseline — but `Dot` and `DotUint8` are full
+LSX SIMD on stable Go today.
 
 **s390x stays qemu-validated for correctness only; native throughput pending**
 access to a GitHub-hosted IBM Z runner — no s390x throughput number is quoted.
@@ -154,7 +162,7 @@ Each SIMD kernel is checked **bit-exact against the scalar reference** — there
 a single right answer for integer MAC — on its real target:
 
 - **amd64** natively on an x86-64 VM (AVX2), **arm64** natively;
-- **ppc64le** natively on real POWER10 silicon (GCC Compile Farm, VSX, Go
+- **ppc64le** natively on real POWER9 silicon (GCC Compile Farm, VSX, Go
   1.26.4), and **s390x, riscv64, loong64** under qemu (`tonistiigi/binfmt`), with
   the big-endian s390x run specifically pinning byte/lane order.
 
