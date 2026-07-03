@@ -144,8 +144,13 @@ is scalar on loong64 (no mixed unsigned×signed byte multiply on LoongArch), so
 that contraction tracks the scalar baseline — but `Dot` and `DotUint8` are full
 LSX SIMD on stable Go today.
 
-**s390x stays qemu-validated for correctness only; native throughput pending**
-access to a GitHub-hosted IBM Z runner — no s390x throughput number is quoted.
+**s390x is now measured on real IBM z15 silicon** (VXE2, native execution,
+2026-07-03, `-count=6`): the vector-facility INT8 MAC kernels (`VMEB`/`VMOB`
+even/odd widening) run `Dot` at **~9.1× the scalar reference** and `DotUint8` at
+**~10×**. `DotU8S8` is **scalar** on s390x (no mixed unsigned×signed byte
+multiply in the vector facility — see the kernel table), so that mixed-sign
+contraction tracks the scalar baseline (~1.0×, no vector win); `Dot` and
+`DotUint8` are full vector SIMD on stable Go today.
 
 The arm64 NEON kernel, measured natively on Apple Silicon with gotip (Go 1.27),
 runs ~2.4× the scalar reference at large sizes (and ~1.8× at dim 64):
