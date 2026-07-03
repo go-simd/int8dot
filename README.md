@@ -144,8 +144,11 @@ is scalar on loong64 (no mixed unsigned×signed byte multiply on LoongArch), so
 that contraction tracks the scalar baseline — but `Dot` and `DotUint8` are full
 LSX SIMD on stable Go today.
 
-**s390x stays qemu-validated for correctness only; native throughput pending**
-access to a GitHub-hosted IBM Z runner — no s390x throughput number is quoted.
+**s390x — measured on real z15** (LPAR guest, VXE2, Ubuntu 6.8, go1.26.4,
+2026-07-03): `Dot/4096` at **10737 MB/s vs scalar 1150 MB/s = 9.3×**;
+`DotUint8/4096` at 10687 MB/s = 9.3×. Signed×unsigned mixed (`DotU8S8`)
+routes to scalar and lands at parity (~1035 MB/s = 0.9× scalar, no VXE2
+kernel for that mix yet).
 
 The arm64 NEON kernel, measured natively on Apple Silicon with gotip (Go 1.27),
 runs ~2.4× the scalar reference at large sizes (and ~1.8× at dim 64):
