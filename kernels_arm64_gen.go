@@ -117,23 +117,23 @@ func main() {
 func dotKernel(name, extA, extB, mul, loadA, loadB string, sig abi.Signature) *arm64.Builder {
 	b := arm64.NewFunc(name, sig, 0)
 	b.LoadArg("a_base", "R0").LoadArg("a_len", "R1").LoadArg("b_base", "R2").
-		Raw("MOVD $0, R4"). // scalar accumulator
+		Raw("MOVD $0, R4").                    // scalar accumulator
 		Raw("VEOR V20.B16, V20.B16, V20.B16"). // S4 accumulator = 0
-		Raw("MOVD $0, R3"). // i = 0
+		Raw("MOVD $0, R3").                    // i = 0
 		Label("vloop").
 		Raw("ADD $16, R3, R5").Raw("CMP R1, R5").Raw("BGT vtail"). // i+16 > len -> tail
-		Raw("VLD1 (R0), [V0.B16]"). // 16 a-bytes
-		Raw("VLD1 (R2), [V1.B16]"). // 16 b-bytes
+		Raw("VLD1 (R0), [V0.B16]").                                // 16 a-bytes
+		Raw("VLD1 (R2), [V1.B16]").                                // 16 b-bytes
 		// Widen bytes -> 16-bit halves (low 8 into .H8, high 8 into .H8).
-		Raw(extA + " V0.B8, V2.H8").
-		Raw(extA + "2 V0.B16, V3.H8").
-		Raw(extB + " V1.B8, V4.H8").
-		Raw(extB + "2 V1.B16, V5.H8").
+		Raw(extA+" V0.B8, V2.H8").
+		Raw(extA+"2 V0.B16, V3.H8").
+		Raw(extB+" V1.B8, V4.H8").
+		Raw(extB+"2 V1.B16, V5.H8").
 		// Widening halfword multiply -> 32-bit products (4 lanes each).
-		Raw(mul + " V2.H4, V4.H4, V16.S4").
-		Raw(mul + "2 V2.H8, V4.H8, V17.S4").
-		Raw(mul + " V3.H4, V5.H4, V18.S4").
-		Raw(mul + "2 V3.H8, V5.H8, V19.S4").
+		Raw(mul+" V2.H4, V4.H4, V16.S4").
+		Raw(mul+"2 V2.H8, V4.H8, V17.S4").
+		Raw(mul+" V3.H4, V5.H4, V18.S4").
+		Raw(mul+"2 V3.H8, V5.H8, V19.S4").
 		// Accumulate the four product vectors into V20 (32-bit, exact).
 		Raw("VADD V16.S4, V20.S4, V20.S4").
 		Raw("VADD V17.S4, V20.S4, V20.S4").
@@ -147,8 +147,8 @@ func dotKernel(name, extA, extB, mul, loadA, loadB string, sig abi.Signature) *a
 		Raw("ADD R5, R4, R4").
 		Label("sloop").
 		Raw("CMP R1, R3").Raw("BGE done"). // i >= len -> done
-		Raw(loadA + " (R0), R5").
-		Raw(loadB + " (R2), R6").
+		Raw(loadA+" (R0), R5").
+		Raw(loadB+" (R2), R6").
 		Raw("MUL R6, R5, R5").
 		Raw("ADD R5, R4, R4").
 		Raw("ADD $1, R0").Raw("ADD $1, R2").
